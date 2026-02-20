@@ -68,11 +68,6 @@ ui <- fluidPage(
         selected = if ("Unbalanced" %in% unique(fh$Sample)) "Unbalanced" else unique(fh$Sample)[1]
       ),
       
-      checkboxInput(
-        inputId = "balanced_only_countries",
-        label   = "Restrict to balanced countries only (complete 1980–2025)",
-        value   = FALSE
-      ),
       
       selectInput(
         inputId = "group",
@@ -81,15 +76,6 @@ ui <- fluidPage(
         selected = "All countries"
       ),
       
-      sliderInput(
-        inputId = "years",
-        label   = "Year range",
-        min     = min(fh$year, na.rm = TRUE),
-        max     = max(fh$year, na.rm = TRUE),
-        value   = c(1980, 2025),
-        step    = 1,
-        sep     = ""
-      ),
       
       # Dropdown with checkboxes (Tableau-like)
       pickerInput(
@@ -102,6 +88,16 @@ ui <- fluidPage(
           `live-search` = TRUE,   # Search bar
           size = 10
         )
+      ),
+      
+      sliderInput(
+        inputId = "years",
+        label   = "Year range",
+        min     = min(fh$year, na.rm = TRUE),
+        max     = max(fh$year, na.rm = TRUE),
+        value   = c(1980, 2025),
+        step    = 1,
+        sep     = ""
       ),
       
       checkboxInput("use_avg", "Use country averages over selected years (cross-section)", TRUE),
