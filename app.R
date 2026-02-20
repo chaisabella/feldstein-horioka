@@ -55,7 +55,7 @@ groups <- list(
 # UI
 # =========================
 ui <- fluidPage(
-  titlePanel("Feldstein–Horioka Explorer (WEO: Saving & Investment, % GDP)"),
+  titlePanel("Feldstein–Horioka Puzzle Explorer"),
   
   sidebarLayout(
     sidebarPanel(
@@ -63,7 +63,7 @@ ui <- fluidPage(
         inputId = "sample",
         label   = "Sample",
         choices = sort(unique(fh$Sample)),
-        selected = if ("Unbalanced" %in% unique(fh$Sample)) "Unbalanced" else unique(fh$Sample)[1]
+        selected = if ("Balanced" %in% unique(fh$Sample)) "Balanced" else unique(fh$Sample)[1]
       ),
       
       selectInput(
@@ -83,10 +83,9 @@ ui <- fluidPage(
         options = list(
           `actions-box` = TRUE,
           `live-search` = TRUE,
+          `live-search-normalize` = TRUE,
           size = 10,
           noneSelectedText = "All countries"
-       #   `selected-text-format` = "count > 3",
-         # `count-selected-text` = "{0} countries selected"
         )
       ),
       
@@ -121,14 +120,14 @@ ui <- fluidPage(
       checkboxInput("show_fit", "Show regression line (lm)", TRUE),
       
       hr(),
-      helpText("Hover on points in the scatter to see country + values (Tableau-style tooltip).")
+      helpText("Hover your mouse on the scatterplot to values for individual data points")
     ),
     
     mainPanel(
       tabsetPanel(
         tabPanel(
           "Scatter (FH)",
-          tags$h4("Feldstein–Horioka Coefficient (updates with filters)"),
+          tags$h4("Feldstein–Horioka Coefficient"),
           uiOutput("fh_coef_box"),
           br(),
           plotlyOutput("fh_scatter", height = "520px"),
@@ -140,6 +139,29 @@ ui <- fluidPage(
         tabPanel(
           "Data Preview",
           DTOutput("preview")
+        ),
+        
+        tabPanel(
+          "About",
+          br(),
+          h4("What is the Feldstein–Horioka Puzzle?"),
+          p("Feldstein and Horioka (1980) documented a strong empirical relationship between national saving and domestic investment across OECD countries."),
+          p("In a world of perfect capital mobility, domestic investment should not depend strongly on domestic saving, because capital can flow freely across borders."),
+          p("However, empirically, investment is highly correlated with saving — suggesting limited international capital mobility. This empirical finding became known as the Feldstein–Horioka puzzle."),
+          br(),
+          h4("Model Estimated in This App"),
+          p("The app estimates the cross-country regression:"),
+          div(style = "font-size:18px; font-weight:bold; margin-bottom:10px;",
+              HTML("Investment/GDP = α + β · Saving/GDP")
+          ),
+          p("A β close to 1 suggests low capital mobility. A β closer to 0 suggests high capital mobility."),
+          br(),
+          h4("Data Source"),
+          p("Saving and investment data are from the IMF World Economic Outlook (WEO) database."),
+          p("Variables: Gross national saving (% GDP) and Gross capital formation (% GDP)."),
+          br(),
+          h4("Reference"),
+          p("Feldstein, Martin, and Charles Horioka (1980). \"Domestic Saving and International Capital Flows.\" Economic Journal 90(358): 314–329.")
         )
       )
     )
