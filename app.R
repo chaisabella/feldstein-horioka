@@ -46,10 +46,11 @@ balanced_country_set <- fh %>%
 # =========================
 groups <- list(
   "All countries" = NULL,
+  "OECD (F-H original)" = c("Australia","Austria","Belgium","Canada","Denmark","Finland","France","Germany","Greece","Iceland","Ireland","Italy","Japan","Luxembourg","Netherlands","New Zealand","Norway","Portugal","Spain","Sweden","Switzerland","United Kingdom","United States"),
+  "OECD (current)" = c("Australia","Austria","Belgium","Canada","Chile","Colombia","Costa Rica","Czech Republic","Denmark","Estonia","Finland","France","Germany","Greece","Hungary","Iceland","Ireland","Israel","Italy","Japan","Korea, Republic of","Latvia","Lithuania","Luxembourg","Mexico","Netherlands","New Zealand","Norway","Poland","Portugal","Slovak Republic","Slovenia","Spain","Sweden","Switzerland","Türkiye","United Kingdom","United States"),
   "G7" = c("Canada", "France", "Germany", "Italy", "Japan", "United Kingdom", "United States"),
-  "ASEAN (custom)" = c("Indonesia", "Malaysia", "Philippines", "Thailand", "Vietnam", "Singapore"),
-  "Nordics" = c("Denmark", "Finland", "Iceland", "Norway", "Sweden"),
-  "BRICS (classic)" = c("Brazil", "Russian Federation", "India", "China, People's Republic of", "South Africa")
+  "ASEAN" = c("Indonesia", "Malaysia", "Philippines", "Thailand", "Vietnam", "Singapore"),
+  "BRICS" = c("Brazil", "Russian Federation", "India", "China, People's Republic of", "South Africa")
 )
 
 # =========================
