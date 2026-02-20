@@ -18,6 +18,7 @@ library(readr)
 library(ggplot2)
 library(plotly)
 library(shinyWidgets)
+library(DT)
 
 # =========================
 # Load data (project root OR data/)
@@ -76,7 +77,7 @@ ui <- fluidPage(
         selected = "All countries"
       ),
       
-      
+       
       # Dropdown with checkboxes (Tableau-like)
       pickerInput(
         inputId = "countries",
@@ -99,6 +100,20 @@ ui <- fluidPage(
         step    = 1,
         sep     = ""
       ),
+      # pickerInput(
+      #   inputId = "years",
+      #   label   = "Years (select specific years)",
+      #   choices = sort(unique(fh$year)),
+      #   selected = 1980:2025,
+      #   multiple = TRUE,
+      #   options = list(
+      #     `actions-box` = TRUE,
+      #     `live-search` = FALSE,
+      #     size = 10,
+      #     `selected-text-format` = "count > 3",
+      #     `count-selected-text` = "{0} years selected"
+      #   )
+      # ),
       
       checkboxInput("use_avg", "Use country averages over selected years (cross-section)", TRUE),
       checkboxInput("show_fit", "Show regression line (lm)", TRUE),
@@ -119,10 +134,7 @@ ui <- fluidPage(
           tags$h4("Full Regression Output"),
           verbatimTextOutput("fh_lm_summary")
         ),
-        tabPanel(
-          "Time Series",
-          plotOutput("ts_plot", height = "520px")
-        ),
+
         tabPanel(
           "Data Preview",
           tableOutput("preview")
@@ -172,6 +184,28 @@ server <- function(input, output, session) {
     )
   }, ignoreInit = TRUE)
   
+  
+  # Keep picker choices in sync with filtered data (don’t change selection unless needed)
+
+  
+  # When group changes, auto-select that group's countries (so you can see what's showing)
+  observeEvent(input$group, {
+    available <- sort(unique(data_filtered()$country))
+    
+    # desired selection = group's members, but only those that exist under current sample/years
+    desired <- if (input$group == "All countries" || is.null(groups[[input$group]])) {
+      character(0)  # keep empty -> your app interprets this as "no country filter = show all"
+    } else {
+      intersect(groups[[input$group]], available)
+    }
+    
+    updatePickerInput(
+      session = session,
+      inputId = "countries",
+      choices = available,
+      selected = desired
+    )
+  }, ignoreInit = TRUE)
   # -------------------------
   # Optional country filter (based on picker selection)
   # If none selected, keep all countries in filtered data.
@@ -295,51 +329,13 @@ server <- function(input, output, session) {
     summary(lm(investment_gdp ~ saving_gdp, data = d))
   })
   
-  # -------------------------
-  # Time series plot: if no country chosen, show up to 3 to avoid spaghetti
-  # -------------------------
-  output$ts_plot <- renderPlot({
-    d <- data_final()
-    validate(need(nrow(d) > 0, "No data after filters."))
-    
-    if (is.null(input$countries) || length(input$countries) == 0) {
-      show_countries <- head(sort(unique(d$country)), 3)
-      d <- d %>% filter(country %in% show_countries)
-    }
-    
-    d_long <- d %>%
-      select(country, year, saving_gdp, investment_gdp) %>%
-      pivot_longer(
-        cols = c(saving_gdp, investment_gdp),
-        names_to = "series",
-        values_to = "value"
-      ) %>%
-      mutate(series = recode(series,
-                             saving_gdp = "Saving (% GDP)",
-                             investment_gdp = "Investment (% GDP)"))
-    
-    ggplot(d_long, aes(x = year, y = value)) +
-      geom_line() +
-      facet_grid(series ~ country, scales = "free_y") +
-      labs(
-        title = "Saving and Investment Over Time",
-        subtitle = paste0(
-          "Sample: ", input$sample,
-          if (isTRUE(input$balanced_only_countries)) " | Balanced countries only" else "",
-          " | Group: ", input$group
-        ),
-        x = NULL,
-        y = NULL
-      )
-  })
   
   # -------------------------
   # Data preview
   # -------------------------
   output$preview <- renderTable({
     data_final() %>%
-      arrange(country, year) %>%
-      head(20)
+      arrange(country, year)
   })
 }
 
