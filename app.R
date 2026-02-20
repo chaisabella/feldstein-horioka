@@ -105,7 +105,7 @@ ui <- fluidPage(
       ),
       
       checkboxInput("use_avg", "Use country averages over selected years (cross-section)", TRUE),
-      checkboxInput("show_fit", "Show regression line (lm)", TRUE),
+      checkboxInput("show_fit", "Show regression line (OLS)", TRUE),
       
       hr(),
       helpText("Hover your mouse on the scatterplot to values for individual data points")
