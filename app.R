@@ -89,16 +89,6 @@ ui <- fluidPage(
         )
       ),
       
-      # YEAR CONTROL (slider by default)
-      # sliderInput(
-      #   inputId = "years",
-      #   label   = "Year range",
-      #   min     = min(fh$year, na.rm = TRUE),
-      #   max     = max(fh$year, na.rm = TRUE),
-      #   value   = c(1980, 2025),
-      #   step    = 1,
-      #   sep     = ""
-      # ),
       
       # If you want the year picker instead of slider, comment sliderInput above and uncomment below.
       # NOTE: The server logic supports BOTH.
@@ -215,7 +205,7 @@ server <- function(input, output, session) {
       choices = available,
       selected = intersect(current, available)
     )
-  }, ignoreInit = TRUE)
+  }, ignoreInit = FALSE)
   
   # When group changes, auto-select that group's countries (so you can see what's showing)
   observeEvent(input$group, {
