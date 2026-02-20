@@ -1,0 +1,158 @@
+---
+title: "fh_analysis"
+output:
+  pdf_document: default
+  html_document: default
+date: "2026-02-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+
+```
+
+## R Markdown
+This script builds a Feldstein–Horioka dataset from IMF WEO country-level data (1980–2025), constructs unbalanced and balanced samples, estimates the FH regression in both panel and cross-sectional forms, and visualizes results using ggplot2.
+
+```{r cars}
+weo_data <- read_csv("/Users/isabellacha/f-h/data/weo_data_countrylevel.csv",
+                     show_col_types = FALSE) #replace filepath as needed 
+
+# Basic input checks (good practice for a coding sample)
+glimpse(weo_data)
+summary(weo_data)
+```
+
+
+
+```{r pressure, echo=FALSE}
+# Indicator names 
+savings <- "Gross national savings, Percent of GDP"
+investment <- "Gross capital formation, Percent of GDP"
+
+# Long -> Wide (country-year)
+fh_wide <- weo_data %>%
+  filter(INDICATOR %in% c(savings, investment)) %>%
+  transmute(
+    country   = COUNTRY,
+    year      = as.integer(TIME_PERIOD),
+    indicator = INDICATOR,
+    value     = as.numeric(OBS_VALUE)
+  ) %>%
+  filter(!is.na(year), !is.na(value)) %>%
+  filter(year >= 1980, year <= 2025) %>%
+  mutate(indicator = recode(indicator,
+                            !!savings := "saving_gdp",
+                            !!investment := "investment_gdp")) %>%
+  pivot_wider(names_from = indicator, values_from = value) %>%
+  filter(!is.na(saving_gdp), !is.na(investment_gdp))
+
+# Sanity checks
+fh_wide %>%
+  summarise(
+    n_obs = n(),
+    n_countries = n_distinct(country),
+    year_min = min(year),
+    year_max = max(year)
+  )
+
+```
+
+```{r}
+# Define balanced panel window
+years <- 1980:2025
+n_years <- length(years)  # 46
+
+# Identify countries with complete coverage in 1980–2025
+balanced_countries <- fh_wide %>%
+  group_by(country) %>%
+  summarise(n_years_available = n_distinct(year), .groups = "drop") %>%
+  filter(n_years_available == n_years) %>%
+  pull(country)
+
+# Create ONE stacked panel dataset with a Sample label
+fh_panel <- bind_rows(
+  fh_wide %>% mutate(Sample = "Unbalanced"),
+  fh_wide %>% filter(country %in% balanced_countries) %>% mutate(Sample = "Balanced")
+)
+
+# Sample size checks
+fh_panel %>%
+  group_by(Sample) %>%
+  summarise(
+    n_obs = n(),
+    n_countries = n_distinct(country),
+    year_min = min(year),
+    year_max = max(year),
+    .groups = "drop"
+  )
+
+
+```
+
+```{r}
+# Store results neatly (keeps workspace clean)
+models <- list()
+
+# Panel regressions
+models$panel_unbalanced <- lm(investment_gdp ~ saving_gdp,
+                              data = fh_panel %>% filter(Sample == "Unbalanced"))
+models$panel_balanced   <- lm(investment_gdp ~ saving_gdp,
+                              data = fh_panel %>% filter(Sample == "Balanced"))
+
+summary(models$panel_unbalanced)
+summary(models$panel_balanced)
+
+# Cross-section: country averages over the selected years, by sample
+fh_cross <- fh_panel %>%
+  group_by(Sample, country) %>%
+  summarise(
+    saving_avg = mean(saving_gdp, na.rm = TRUE),
+    investment_avg = mean(investment_gdp, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+models$cross_unbalanced <- lm(investment_avg ~ saving_avg,
+                              data = fh_cross %>% filter(Sample == "Unbalanced"))
+models$cross_balanced   <- lm(investment_avg ~ saving_avg,
+                              data = fh_cross %>% filter(Sample == "Balanced"))
+
+summary(models$cross_unbalanced)
+summary(models$cross_balanced)
+
+```
+
+
+```{r}
+ggplot(fh_cross, aes(x = saving_avg, y = investment_avg)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~ Sample) +
+  labs(
+    title = "Feldstein–Horioka: Cross-Section (Country Averages, 1980–2025)",
+    subtitle = "WEO gross national saving and gross capital formation (% of GDP)",
+    x = "Gross national saving (% GDP)",
+    y = "Gross capital formation (% GDP)"
+  )
+
+
+```
+
+
+
+```{r}
+# Save the stacked panel with Sample labels in the PROJECT ROOT
+# (You said: no subfolders)
+write_csv(fh_panel, "/Users/isabellacha/f-h/data/fh_panel_with_sample.csv")
+
+# Optional: also save the cross-section used for the plot
+write_csv(fh_cross, "/Users/isabellacha/f-h/data/fh_cross_with_sample.csv")
+
+```
+
+
