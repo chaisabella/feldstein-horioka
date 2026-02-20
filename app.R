@@ -24,7 +24,7 @@ library(DT)
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
 # =========================
-# Load data (project root OR data/)
+# Load data 
 # =========================
 fh <- read_csv("data/fh_panel_with_sample.csv", show_col_types = FALSE) %>%
   mutate(
@@ -89,9 +89,7 @@ ui <- fluidPage(
         )
       ),
       
-      
-      # If you want the year picker instead of slider, comment sliderInput above and uncomment below.
-      # NOTE: The server logic supports BOTH.
+
       pickerInput(
         inputId = "years",
         label   = "Select years",
