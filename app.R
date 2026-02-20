@@ -6,7 +6,7 @@
 # - Toggle: country averages (cross-section) vs country-year panel points
 # - Interactive scatter with hover tooltips (plotly)
 # - Coefficient card showing beta, SE, R^2, N (updates with filters)
-# - Time-series panel for selected (or auto-picked) countries
+# - Data preview as scrollable/searchable table (DT)
 
 # =========================
 # Packages
@@ -20,15 +20,12 @@ library(plotly)
 library(shinyWidgets)
 library(DT)
 
+# helper (you were using %||% without defining it)
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 # =========================
 # Load data (project root OR data/)
 # =========================
-# You said you want "everything in the data file, no subfolders".
-# If your CSV is in the project root, use:
-#   fh <- read_csv("fh_panel_with_sample.csv", show_col_types = FALSE)
-# If your CSV is in data/, use:
-#   fh <- read_csv("data/fh_panel_with_sample.csv", show_col_types = FALSE)
-
 fh <- read_csv("data/fh_panel_with_sample.csv", show_col_types = FALSE) %>%
   mutate(
     year = as.integer(year),
@@ -64,11 +61,10 @@ ui <- fluidPage(
     sidebarPanel(
       selectInput(
         inputId = "sample",
-        label   = "Sample (dataset label)",
+        label   = "Sample",
         choices = sort(unique(fh$Sample)),
         selected = if ("Unbalanced" %in% unique(fh$Sample)) "Unbalanced" else unique(fh$Sample)[1]
       ),
-      
       
       selectInput(
         inputId = "group",
@@ -77,43 +73,49 @@ ui <- fluidPage(
         selected = "All countries"
       ),
       
-       
       # Dropdown with checkboxes (Tableau-like)
       pickerInput(
         inputId = "countries",
-        label   = "Countries (dropdown w/ checkboxes)",
-        choices = sort(unique(fh$country)),  # will be updated dynamically after filters
+        label   = "Select countries",
+        choices = sort(unique(fh$country)),  # updated dynamically after filters
+        selected = sort(unique(fh$country)),
         multiple = TRUE,
         options = list(
-          `actions-box` = TRUE,   # Select All / Deselect All
-          `live-search` = TRUE,   # Search bar
-          size = 10
+          `actions-box` = TRUE,
+          `live-search` = TRUE,
+          size = 10,
+          noneSelectedText = "All countries"
+       #   `selected-text-format` = "count > 3",
+         # `count-selected-text` = "{0} countries selected"
         )
       ),
       
-      sliderInput(
-        inputId = "years",
-        label   = "Year range",
-        min     = min(fh$year, na.rm = TRUE),
-        max     = max(fh$year, na.rm = TRUE),
-        value   = c(1980, 2025),
-        step    = 1,
-        sep     = ""
-      ),
-      # pickerInput(
+      # YEAR CONTROL (slider by default)
+      # sliderInput(
       #   inputId = "years",
-      #   label   = "Years (select specific years)",
-      #   choices = sort(unique(fh$year)),
-      #   selected = 1980:2025,
-      #   multiple = TRUE,
-      #   options = list(
-      #     `actions-box` = TRUE,
-      #     `live-search` = FALSE,
-      #     size = 10,
-      #     `selected-text-format` = "count > 3",
-      #     `count-selected-text` = "{0} years selected"
-      #   )
+      #   label   = "Year range",
+      #   min     = min(fh$year, na.rm = TRUE),
+      #   max     = max(fh$year, na.rm = TRUE),
+      #   value   = c(1980, 2025),
+      #   step    = 1,
+      #   sep     = ""
       # ),
+      
+      # If you want the year picker instead of slider, comment sliderInput above and uncomment below.
+      # NOTE: The server logic supports BOTH.
+      pickerInput(
+        inputId = "years",
+        label   = "Select years",
+        choices = sort(unique(fh$year)),
+        selected = 1980:2025,
+        multiple = TRUE,
+        options = list(
+          `actions-box` = TRUE,
+          `live-search` = FALSE,
+          size = 10,
+          noneSelectedText = "Select years"
+        )
+      ),
       
       checkboxInput("use_avg", "Use country averages over selected years (cross-section)", TRUE),
       checkboxInput("show_fit", "Show regression line (lm)", TRUE),
@@ -134,10 +136,10 @@ ui <- fluidPage(
           tags$h4("Full Regression Output"),
           verbatimTextOutput("fh_lm_summary")
         ),
-
+        
         tabPanel(
           "Data Preview",
-          tableOutput("preview")
+          DTOutput("preview")
         )
       )
     )
@@ -149,52 +151,56 @@ ui <- fluidPage(
 # =========================
 server <- function(input, output, session) {
   
+  # Make year filtering consistent across:
+  # - slider (length 2): interpret as full continuous range
+  # - picker (length > 2): interpret as explicit year set
+  years_vec <- reactive({
+    y <- input$years
+    if (is.null(y)) return(integer(0))
+    y <- as.integer(y)
+    if (length(y) == 2) seq.int(min(y), max(y)) else sort(y)
+  })
+  
+  years_range <- reactive({
+    y <- years_vec()
+    c(min(y), max(y))
+  })
+  
   # -------------------------
-  # Filter by sample + year + (optional) balanced-only + group
+  # Filter by sample + years + group
   # -------------------------
   data_filtered <- reactive({
     d <- fh %>%
       filter(Sample == input$sample) %>%
-      filter(year >= input$years[1], year <= input$years[2])
-    
-    if (isTRUE(input$balanced_only_countries)) {
-      d <- d %>% filter(country %in% balanced_country_set)
-    }
+      filter(year %in% years_vec())
     
     keep <- groups[[input$group]]
-    if (!is.null(keep)) {
-      d <- d %>% filter(country %in% keep)
-    }
+    if (!is.null(keep)) d <- d %>% filter(country %in% keep)
     
     d
   })
   
   # -------------------------
-  # Dynamically update the country dropdown choices after filters
-  # (keeps the list short and relevant)
+  # Update country dropdown choices after filters (preserve current selection)
   # -------------------------
   observeEvent(data_filtered(), {
     available <- sort(unique(data_filtered()$country))
+    current <- input$countries %||% character(0)
     
     updatePickerInput(
       session = session,
       inputId = "countries",
       choices = available,
-      selected = intersect(input$countries %||% character(0), available)
+      selected = intersect(current, available)
     )
   }, ignoreInit = TRUE)
-  
-  
-  # Keep picker choices in sync with filtered data (don’t change selection unless needed)
-
   
   # When group changes, auto-select that group's countries (so you can see what's showing)
   observeEvent(input$group, {
     available <- sort(unique(data_filtered()$country))
     
-    # desired selection = group's members, but only those that exist under current sample/years
     desired <- if (input$group == "All countries" || is.null(groups[[input$group]])) {
-      character(0)  # keep empty -> your app interprets this as "no country filter = show all"
+      character(0)  # empty means "no filter" => show all available
     } else {
       intersect(groups[[input$group]], available)
     }
@@ -206,25 +212,21 @@ server <- function(input, output, session) {
       selected = desired
     )
   }, ignoreInit = TRUE)
+  
   # -------------------------
   # Optional country filter (based on picker selection)
   # If none selected, keep all countries in filtered data.
   # -------------------------
   data_final <- reactive({
     d <- data_filtered()
-    
     if (!is.null(input$countries) && length(input$countries) > 0) {
       d <- d %>% filter(country %in% input$countries)
     }
-    
     d
   })
   
   # -------------------------
-  # Data used for scatter:
-  # - Cross-section: country averages within selected years
-  # - Panel: all country-year points
-  # Adds tooltip text for plotly hover
+  # Data used for scatter + tooltip text
   # -------------------------
   data_for_scatter <- reactive({
     d <- data_final()
@@ -243,7 +245,7 @@ server <- function(input, output, session) {
             "<b>", country, "</b>",
             "<br>Saving (% GDP): ", sprintf("%.2f", saving_gdp),
             "<br>Investment (% GDP): ", sprintf("%.2f", investment_gdp),
-            "<br><i>Avg ", input$years[1], "–", input$years[2], "</i>"
+            "<br><i>Avg ", years_range()[1], "–", years_range()[2], "</i>"
           )
         )
     } else {
@@ -284,24 +286,18 @@ server <- function(input, output, session) {
   
   # -------------------------
   # Interactive scatter with hover tooltips + regression line
-  # IMPORTANT: map tooltip text ONLY in geom_point (not global aes)
-  # so geom_smooth draws reliably under ggplotly
   # -------------------------
   output$fh_scatter <- renderPlotly({
     d <- data_for_scatter()
     validate(need(nrow(d) >= 5, "Not enough observations after filters. Try selecting more countries/years."))
     
     title_txt <- if (isTRUE(input$use_avg)) {
-      paste0("FH Cross-Section (country averages, ", input$years[1], "–", input$years[2], ")")
+      paste0("FH Cross-Section (country averages, ", years_range()[1], "–", years_range()[2], ")")
     } else {
-      paste0("FH Panel Scatter (country-year, ", input$years[1], "–", input$years[2], ")")
+      paste0("FH Panel Scatter (country-year, ", years_range()[1], "–", years_range()[2], ")")
     }
     
-    subtitle_txt <- paste0(
-      "Sample: ", input$sample,
-      if (isTRUE(input$balanced_only_countries)) " | Balanced countries only" else "",
-      " | Group: ", input$group
-    )
+    subtitle_txt <- paste0("Sample: ", input$sample, " | Group: ", input$group)
     
     p <- ggplot(d, aes(x = saving_gdp, y = investment_gdp)) +
       geom_point(aes(text = tooltip), alpha = 0.7) +
@@ -325,18 +321,19 @@ server <- function(input, output, session) {
   output$fh_lm_summary <- renderPrint({
     d <- data_for_scatter()
     validate(need(nrow(d) >= 5, "Not enough observations for regression after filters."))
-    
     summary(lm(investment_gdp ~ saving_gdp, data = d))
   })
   
-  
   # -------------------------
-  # Data preview
+  # Data preview (scroll/search/sort)
   # -------------------------
-  output$preview <- renderTable({
-    data_final() %>%
-      arrange(country, year)
-  })
+  output$preview <- renderDT({
+    data_final() %>% arrange(country, year)
+  }, options = list(
+    pageLength = 25,
+    lengthMenu = c(10, 25, 50, 100, 250, 500),
+    scrollX = TRUE
+  ), rownames = FALSE)
 }
 
 shinyApp(ui, server)
