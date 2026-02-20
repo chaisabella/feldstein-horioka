@@ -20,7 +20,7 @@ library(plotly)
 library(shinyWidgets)
 library(DT)
 
-# helper (you were using %||% without defining it)
+# helper function 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
 # =========================
